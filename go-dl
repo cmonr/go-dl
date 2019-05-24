@@ -1,0 +1,136 @@
+#!/usr/bin/env bash
+
+set -eufo pipefail
+
+readonly self_name=${0##*/}
+readonly self_version="0.0.1"
+
+usage()
+{
+  cat - <<EOF
+Usage:
+  ${self_name} go_version
+  ${self_name} --version
+  ${self_name} --help
+    
+Downloads and installs a specified version of the 'go' executable.
+The versioned go executable is then immediately available for use.
+
+  go_version
+    The specified version of 'go' to download and install.
+
+    A list of valid releases can be found here:
+      https://godoc.org/golang.org/dl#pkg-subdirectories
+
+  -h --help
+    Displays this help.
+
+  --version
+    Prints ${self_name} version.
+
+Examples:
+  ${self_name} 1.11.5;  go1.11.5 version
+  ${self_name} 1.10;    go1.10 version
+
+EOF
+
+  exit "${1:-0}"
+}
+
+version() { printf"%s\n" "${self_name} ${self_version}"; exit 0; }
+
+info() { printf "I: %s\n" "${1}"; }
+die() { printf "E: %s\n" "${1}" 1>&2; exit "${2:-1}"; }
+
+
+# Set variables
+arg_version=""; 
+
+# Parse user parameters
+for arg in "$@"; do
+  case "${arg}" in
+    --help | -h )
+      usage
+      ;;
+
+    --version )
+      version
+      ;;
+
+    --* | -* )
+      die "Invalid argument: ${arg}"
+      ;;
+
+    *)
+      if [[ -z "${arg_version}" ]]; then
+        arg_version="${arg}"
+      else
+        die "Extra argument: ${arg}"
+      fi
+      ;;
+  esac
+done
+
+
+# Verify parameters are not empty
+[ -z "${arg_version}" ] \
+  && die "Requested go version not provided."
+
+
+
+# Util check.
+go version &> /dev/null \
+  || die "'go' not installed"
+
+# Env check
+[ -z "${GOPATH:-}" ] \
+  && die "GOPATH not set."
+[ -z "${GOBIN:-}" ] \
+  && die "GOBIN not set."
+<<< "${PATH}" tr ':' $'\n' \
+  | grep -q "^${GOBIN}$" \
+  || die "GOBIN not in PATH."
+
+
+# Fetch/update go release info.
+go get -d "golang.org/dl/..." &> /dev/null \
+  || die "Failed to fetch go release information."
+
+
+# Determine which full version to use
+full_version=$(
+  ls -1 "${GOPATH}/src/golang.org/dl" \
+    | grep ^go${arg_version} \
+    | sort --version-sort --reverse \
+    | head -n1 \
+    | sed 's_^go__'
+)
+[ -z "${full_version}" ] \
+  && die "Requested version not found: '${arg_version}'"
+
+
+# Download, and install, if needed.
+if [ ! -e "${GOPATH}/sdk/go${full_version}" ]; then
+
+  info "Downloading v${full_version}"
+  go get "golang.org/dl/go${full_version}" &> /dev/null \
+    || die "Download failed"
+
+  # Note: 'go<version> download' downloads a package into '${HOME}/sdk' with no
+  #       option to change the target directory.
+  HOME=${GOPATH} go${full_version} download &> /dev/null \
+    || die "Download failed"
+
+  # Generate script to automatically handle setting '${HOME}'
+  mv "${GOPATH}/bin/go${full_version}" "${GOPATH}/bin/_go${full_version}.bin"
+  cat - > "${GOPATH}/bin/go${full_version}" <<EOF
+#!/usr/bin/env sh
+HOME=\${GOPATH} _go${full_version}.bin \$@
+EOF
+  chmod +x "${GOPATH}/bin/go${full_version}"
+
+  # Symlink if needed
+  ln -s "${GOPATH}/bin/go${full_version}" "${GOPATH}/bin/go${arg_version}" &> /dev/null \
+    || true
+
+fi

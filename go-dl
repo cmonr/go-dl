@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Author: Cruz Monrreal II
 
 set -eufo pipefail
 
@@ -50,7 +51,7 @@ arg_version="";
 for arg in "$@"; do
   case "${arg}" in
     --help | -h )
-      usage
+      usage 0
       ;;
 
     --version )
@@ -99,9 +100,10 @@ go get -d "golang.org/dl/..." &> /dev/null \
 
 # Determine which full version to use
 full_version=$(
-  ls -1 "${GOPATH}/src/golang.org/dl" \
-    | grep ^go${arg_version} \
+  find . -maxdepth 1 -type d ! -name '.*' \
+    | cut -c 3- \
     | sort --version-sort --reverse \
+    | grep ^go${arg_version} \
     | head -n1 \
     | sed 's_^go__'
 )
@@ -118,14 +120,14 @@ if [ ! -e "${GOPATH}/sdk/go${full_version}" ]; then
 
   # Note: 'go<version> download' downloads a package into '${HOME}/sdk' with no
   #       option to change the target directory.
-  HOME=${GOPATH} go${full_version} download &> /dev/null \
+  HOME=${GOPATH} "go${full_version}" download &> /dev/null \
     || die "Download failed"
 
   # Generate script to automatically handle setting '${HOME}'
   mv "${GOPATH}/bin/go${full_version}" "${GOPATH}/bin/_go${full_version}.bin"
   cat - > "${GOPATH}/bin/go${full_version}" <<EOF
 #!/usr/bin/env sh
-HOME=\${GOPATH} _go${full_version}.bin \$@
+HOME="\${GOPATH}" _go${full_version}.bin \$@
 EOF
   chmod +x "${GOPATH}/bin/go${full_version}"
 

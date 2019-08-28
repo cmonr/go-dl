@@ -103,7 +103,7 @@ full_version="$(
   go list "golang.org/dl/..." \
     | sort --version-sort --reverse \
     | sed -e 's_.*dl/go__g' \
-          -ne '\_'"${arg_version}"'_ { p; q; }' 
+          -ne '\_^'"${arg_version}"'_ { p; q; }' 
 )"
 
 [ -z "${full_version}" ] \

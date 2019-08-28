@@ -100,7 +100,7 @@ go version &> /dev/null \
 go get -d golang.org/dl/...
 
 full_version="$(
-  go list "golang.org/dl/..." 2>/dev/null \
+  go list "golang.org/dl/..." \
     | sort --version-sort --reverse \
     | sed -e 's_.*dl/go__g' \
           -ne '\_'"${arg_version}"'_ { p; q; }' 
@@ -112,20 +112,22 @@ full_version="$(
 
 # Download and install.
 info "Downloading v${full_version}"
-go get "golang.org/dl/go${full_version}" &> /dev/null \
+go get -v "golang.org/dl/go${full_version}" \
   || die "Download failed"
 
 # Note: 'go<version> download' downloads a package into '${HOME}/sdk' with no
 #       option to change the target directory.
-HOME=${GOPATH} "go${full_version}" download &> /dev/null \
+HOME=${GOPATH} "go${full_version}" download \
   || die "Download failed"
 
 # Generate script to automatically handle setting '${HOME}'
 mv "${GOPATH}/bin/go${full_version}" "${GOPATH}/bin/_go${full_version}.bin"
+
 cat - > "${GOPATH}/bin/go${full_version}" <<EOF
 #!/usr/bin/env sh
 HOME="\${GOPATH}" _go${full_version}.bin \$@
 EOF
+
 chmod +x "${GOPATH}/bin/go${full_version}"
 
 # Symlink if needed
